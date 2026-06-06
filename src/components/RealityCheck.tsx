@@ -183,11 +183,11 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
         <p className="label-tag" style={{ marginBottom: 14 }}>THE INQUIRY</p>
         
         {loading ? (
-          <div className="animate-pulse flex space-x-4">
-            <div className="flex-1 space-y-4 py-1">
-              <div className="h-2 bg-white/20 rounded w-3/4"></div>
-              <div className="h-2 bg-white/20 rounded w-1/2"></div>
-            </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start", opacity: 0.7 }}>
+            <span style={{ fontFamily: "var(--font-dm-mono), monospace", fontSize: 12, color: "#A855F7", flexShrink: 0, marginTop: 1 }}>AI</span>
+            <p className="animate-pulse" style={{ fontSize: 14, color: "#00F5FF", lineHeight: 1.5, fontFamily: "var(--font-dm-mono), monospace", letterSpacing: "0.05em" }}>
+              ANALYZING TRAJECTORY // FORMULATING INQUIRY...
+            </p>
           </div>
         ) : (
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
