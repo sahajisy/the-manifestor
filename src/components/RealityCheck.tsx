@@ -56,7 +56,9 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ aim, intensity }),
       });
+      if (!res.ok) throw new Error("API responded with an error");
       const data = await res.json();
+      if (!data.question) throw new Error("No question generated");
       setQuestion(data.question);
     } catch (e) {
       console.error(e);

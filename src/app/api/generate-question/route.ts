@@ -38,7 +38,7 @@ ${tonePrompt}
 Return only the question text. Do not include quotes around it.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-1.5-flash',
       contents: prompt,
     });
 
