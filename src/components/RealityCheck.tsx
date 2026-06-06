@@ -37,6 +37,18 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
   }, []);
 
   const generateQuestion = async () => {
+    const cached = sessionStorage.getItem('cachedQuestion');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.aim === aim) {
+          setQuestion(parsed.question);
+          sessionStorage.removeItem('cachedQuestion');
+          return;
+        }
+      } catch (e) {}
+    }
+
     setLoading(true);
     try {
       const res = await fetch('/api/generate-question', {
@@ -106,21 +118,16 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
     try {
       const reader = new FileReader();
       reader.readAsDataURL(audioBlob);
-      reader.onloadend = async () => {
-        try {
-          const base64Audio = reader.result;
-          await addDoc(collection(db, 'users', userId, 'checks'), {
-            question,
-            audioUrl: base64Audio,
-            timestamp: serverTimestamp(),
-          });
-          onComplete(); 
-        } catch (error) {
-          console.error("Error saving to Firestore:", error);
-          alert("Failed to save answer to database.");
-        } finally {
-          setUploading(false);
-        }
+      reader.onloadend = () => {
+        const base64Audio = reader.result;
+        // Fire and forget for INSTANT user experience
+        addDoc(collection(db, 'users', userId, 'checks'), {
+          question,
+          audioUrl: base64Audio,
+          timestamp: serverTimestamp(),
+        }).catch(err => console.error("Background sync error:", err));
+        
+        onComplete(); 
       };
     } catch (error) {
       console.error("Error preparing answer:", error);

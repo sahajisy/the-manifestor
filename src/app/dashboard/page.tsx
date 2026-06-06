@@ -59,6 +59,22 @@ export default function DashboardPage() {
               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
               setDaysRemaining(diffDays > 0 ? diffDays : 0);
             }
+
+            // BACKGROUND PREFETCH: Generate tomorrow's question now so it's instant later
+            const currentAim = docSnap.data().aim;
+            const currentIntensity = docSnap.data().intensity || 'Harsh';
+            const cached = sessionStorage.getItem('cachedQuestion');
+            if (!cached || JSON.parse(cached).aim !== currentAim) {
+              fetch('/api/generate-question', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ aim: currentAim, intensity: currentIntensity }),
+              }).then(r => r.json()).then(data => {
+                if (data.question) {
+                  sessionStorage.setItem('cachedQuestion', JSON.stringify({ aim: currentAim, question: data.question }));
+                }
+              }).catch(() => {});
+            }
           } else {
             router.push('/onboarding');
             return;
