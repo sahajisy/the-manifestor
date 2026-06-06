@@ -91,6 +91,15 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
     }
   };
 
+  const handleToggleRecording = () => {
+    if (recorded || loading) return;
+    if (pressing) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
   const submitAnswer = async () => {
     if (!audioBlob || !question) return;
     setUploading(true);
@@ -133,7 +142,7 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
         Face The <span className="iridescent">Truth</span>
       </h2>
       <p style={{ color: "#8B949E", fontSize: 14, marginBottom: 36, lineHeight: 1.6 }}>
-        Hold the button and speak your truth. Be brutally honest.
+        Tap the button and speak your truth. Be brutally honest.
       </p>
 
       {/* Big record button */}
@@ -141,11 +150,9 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
         <div style={{ position: "relative" }}>
           <button
             className={`record-btn ${pressing ? "pressing" : ""}`}
-            onPointerDown={startRecording}
-            onPointerUp={stopRecording}
-            onPointerLeave={stopRecording}
+            onClick={handleToggleRecording}
             disabled={recorded || loading}
-            style={{ opacity: (recorded || loading) ? 0.5 : 1, touchAction: 'none' }}
+            style={{ opacity: (recorded || loading) ? 0.5 : 1, touchAction: 'manipulation' }}
           >
             <div className="ring3" />
             <MicIcon size={40} color="white" />
@@ -161,12 +168,12 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
                   {String(Math.floor(seconds / 60)).padStart(2, "0")}:{String(seconds % 60).padStart(2, "0")}
                 </span>
               </div>
-              <p style={{ color: "#8B949E", fontSize: 13 }}>Recording… release when done</p>
+              <p style={{ color: "#8B949E", fontSize: 13 }}>Recording… tap to stop</p>
             </>
           ) : recorded ? (
             <p style={{ color: "#00FF88", fontSize: 14, fontWeight: 500 }}>Recording saved · {seconds}s</p>
           ) : (
-            <p style={{ color: "#8B949E", fontSize: 13 }}>Hold to record</p>
+            <p style={{ color: "#8B949E", fontSize: 13 }}>Tap to start recording</p>
           )}
         </div>
       </div>
