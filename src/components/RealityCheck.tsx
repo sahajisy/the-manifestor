@@ -80,7 +80,8 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const mimeType = mediaRecorderRef.current?.mimeType || '';
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
         setAudioBlob(blob);
       };
 
