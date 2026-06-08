@@ -4,10 +4,22 @@ import { useAuth } from '@/components/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore';
 
-function Toggle({ label, sub, defaultOn }: { label: string, sub?: string, defaultOn?: boolean }) {
-  const [on, setOn] = useState(defaultOn ?? false);
+function Toggle({ label, sub, defaultOn, on, onChange }: { label: string, sub?: string, defaultOn?: boolean, on?: boolean, onChange?: (val: boolean) => void }) {
+  const [internalOn, setInternalOn] = useState(defaultOn ?? false);
+  const isControlled = on !== undefined;
+  const isChecked = isControlled ? on : internalOn;
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isControlled) {
+      setInternalOn(e.target.checked);
+    }
+    if (onChange) {
+      onChange(e.target.checked);
+    }
+  };
+
   const id = `toggle-${label.replace(/\s/g, "")}`;
   return (
     <div className="toggle-wrap" style={{ padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
@@ -16,7 +28,7 @@ function Toggle({ label, sub, defaultOn }: { label: string, sub?: string, defaul
         {sub && <p style={{ fontSize: 12, color: "#8B949E" }}>{sub}</p>}
       </div>
       <label className="toggle" htmlFor={id}>
-        <input id={id} type="checkbox" checked={on} onChange={() => setOn(!on)} />
+        <input id={id} type="checkbox" checked={isChecked} onChange={handleChange} />
         <div className="toggle-track">
           <div className="toggle-thumb" />
         </div>
@@ -26,10 +38,11 @@ function Toggle({ label, sub, defaultOn }: { label: string, sub?: string, defaul
 }
 
 export default function SettingsPage() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, deleteAccount } = useAuth();
   const router = useRouter();
   
   const [aim, setAim] = useState("");
+  const [weeklyReport, setWeeklyReport] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -38,8 +51,10 @@ export default function SettingsPage() {
     } else if (user) {
       const fetchAim = async () => {
         const docSnap = await getDoc(doc(db, 'users', user.uid));
-        if (docSnap.exists() && docSnap.data().aim) {
-          setAim(docSnap.data().aim);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.aim) setAim(data.aim);
+          if (data.weeklyReport !== undefined) setWeeklyReport(data.weeklyReport);
         }
       };
       fetchAim();
@@ -57,6 +72,53 @@ export default function SettingsPage() {
       alert("Failed to update.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCompleteGoal = async () => {
+    if (!user || !aim.trim()) return;
+    const confirmed = window.confirm("Mark this goal as completed? You will be able to set a new Ultimate Aim.");
+    if (!confirmed) return;
+    
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        completedGoals: arrayUnion(aim.trim()),
+        aim: ""
+      });
+      setAim("");
+      alert("Goal marked as completed! You can now set a new one.");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to complete goal.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleWeeklyReport = async (val: boolean) => {
+    setWeeklyReport(val);
+    if (user) {
+      try {
+        await updateDoc(doc(db, 'users', user.uid), { weeklyReport: val });
+      } catch (e) {
+        console.error("Failed to update weekly report preference", e);
+      }
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm("Are you absolutely sure you want to delete your account? This action cannot be undone.");
+    if (!confirmed) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid));
+      await deleteAccount();
+    } catch (error: any) {
+      if (error?.code === 'auth/requires-recent-login') {
+        alert("Please sign out and sign in again before deleting your account.");
+      } else {
+        alert("Failed to delete account. " + (error?.message || ""));
+      }
     }
   };
 
@@ -79,20 +141,29 @@ export default function SettingsPage() {
           onFocus={e => e.target.style.borderColor = "rgba(0, 245, 255, 0.4)"}
           onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.08)"}
         />
-        <button 
-          onClick={handleUpdateAim} 
-          disabled={saving || !aim.trim()}
-          style={{ marginTop: 12, width: "100%", padding: "12px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#E8EDF5", cursor: saving ? "not-allowed" : "pointer" }}
-        >
-          {saving ? "Saving..." : "Update Aim"}
-        </button>
+        <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+          <button 
+            onClick={handleUpdateAim} 
+            disabled={saving || !aim.trim()}
+            style={{ flex: 1, padding: "12px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#E8EDF5", cursor: saving || !aim.trim() ? "not-allowed" : "pointer" }}
+          >
+            {saving ? "Saving..." : "Update Aim"}
+          </button>
+          <button 
+            onClick={handleCompleteGoal} 
+            disabled={saving || !aim.trim()}
+            style={{ flex: 1, padding: "12px", borderRadius: 8, background: "rgba(0,245,255,0.1)", border: "1px solid rgba(0,245,255,0.3)", color: "#00f5ff", cursor: saving || !aim.trim() ? "not-allowed" : "pointer" }}
+          >
+            Mark Completed
+          </button>
+        </div>
       </div>
 
       <div className="glass" style={{ padding: "20px", marginBottom: 16 }}>
         <p className="label-tag" style={{ marginBottom: 2 }}>NOTIFICATIONS</p>
         <Toggle label="Daily Reminder" sub="Push notification at your chosen time" defaultOn={true} />
         <Toggle label="Streak Alerts" sub="Know when your streak is at risk" defaultOn={true} />
-        <Toggle label="Weekly Report" sub="Summary every Sunday morning" />
+        <Toggle label="Weekly Report" sub="Summary every Sunday morning" on={weeklyReport} onChange={handleToggleWeeklyReport} />
       </div>
 
       <div className="glass" style={{ padding: "20px", marginBottom: 16 }}>
@@ -123,13 +194,23 @@ export default function SettingsPage() {
         <span style={{ fontSize: 15, fontWeight: 500 }}>About Developer</span>
       </button>
 
-      <button onClick={logout} className="glass" style={{ width: "100%", padding: "16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#FF6B6B", border: "1px solid rgba(255, 107, 107, 0.2)", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255, 107, 107, 0.1)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.032)"}>
+      <button onClick={logout} className="glass" style={{ width: "100%", padding: "16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#FF6B6B", border: "1px solid rgba(255, 107, 107, 0.2)", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255, 107, 107, 0.1)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.032)"}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
           <polyline points="16 17 21 12 16 7"></polyline>
           <line x1="21" y1="12" x2="9" y2="12"></line>
         </svg>
         <span style={{ fontSize: 15, fontWeight: 500 }}>Sign Out</span>
+      </button>
+
+      <button onClick={handleDeleteAccount} className="glass" style={{ width: "100%", padding: "16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#FF4444", border: "1px solid rgba(255, 68, 68, 0.3)", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255, 68, 68, 0.15)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.032)"}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 6h18"></path>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+        <span style={{ fontSize: 15, fontWeight: 500 }}>Delete Account</span>
       </button>
     </div>
   );

@@ -108,6 +108,11 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
 
   const handleToggleRecording = () => {
     if (recorded || loading) return;
+    
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+
     if (pressing) {
       stopRecording();
     } else {

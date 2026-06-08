@@ -8,7 +8,7 @@ async function testModel() {
     try {
       await ai.models.generateContent({ model: m, contents: 'hi' });
       console.log(m, 'SUCCESS');
-    } catch(e) {
+    } catch (e) {
       console.log(m, 'ERROR:', e.message);
     }
   }

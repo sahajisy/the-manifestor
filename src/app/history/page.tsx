@@ -4,12 +4,13 @@ import { useAuth } from '@/components/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
 
 export default function HistoryPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [checks, setChecks] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
   const [fetchingData, setFetchingData] = useState(true);
 
   useEffect(() => {
@@ -20,21 +21,66 @@ export default function HistoryPage() {
 
   useEffect(() => {
     if (user) {
-      const fetchHistory = async () => {
+      const fetchData = async () => {
         try {
-          const q = query(collection(db, 'users', user.uid, 'checks'), orderBy('timestamp', 'desc'));
-          const snap = await getDocs(q);
-          const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setChecks(docs);
+          const qChecks = query(collection(db, 'users', user.uid, 'checks'), orderBy('timestamp', 'desc'));
+          const snapChecks = await getDocs(qChecks);
+          setChecks(snapChecks.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+          const qReports = query(collection(db, 'users', user.uid, 'reports'), orderBy('timestamp', 'desc'));
+          const snapReports = await getDocs(qReports);
+          setReports(snapReports.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (error) {
           console.error("Error fetching history:", error);
         } finally {
           setFetchingData(false);
         }
       };
-      fetchHistory();
+      fetchData();
     }
   }, [user]);
+
+  const generateSampleReport = async () => {
+    if (!user) return;
+    setFetchingData(true);
+    try {
+      // Get aim
+      let aim = "Unknown";
+      const userDocSnap = await getDoc(doc(db, 'users', user.uid));
+      if (userDocSnap.exists()) {
+        aim = userDocSnap.data().aim || "Unknown";
+      }
+      
+      const res = await fetch('/api/debug/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aim, checks })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.summary) {
+          import('firebase/firestore').then(async ({ addDoc, serverTimestamp, collection }) => {
+            await addDoc(collection(db, 'users', user.uid, 'reports'), {
+              summary: data.summary,
+              timestamp: serverTimestamp(),
+              checksCount: checks.length
+            });
+            window.location.reload();
+          });
+        } else {
+          alert("Failed to generate report. Empty summary.");
+        }
+      } else {
+        alert("Failed to generate report using backend API.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error generating report.");
+    } finally {
+      setFetchingData(false);
+    }
+  };
 
   if (loading || fetchingData) {
     return <div className="flex items-center justify-center min-h-[50vh] text-[#8B949E] text-sm">Loading logs...</div>;
@@ -49,6 +95,31 @@ export default function HistoryPage() {
         Your <span className="iridescent">Journey</span>
       </h2>
 
+      <button 
+        onClick={generateSampleReport} 
+        style={{ width: "100%", padding: "12px", marginBottom: 24, borderRadius: 8, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.3)", color: "#A855F7", cursor: "pointer", fontSize: 14, fontWeight: 500 }}
+      >
+        Generate Weekly Report (Debug)
+      </button>
+
+      {reports.length > 0 && (
+        <div style={{ marginBottom: 40 }}>
+          <p className="label-tag" style={{ marginBottom: 12, color: "#00F5FF" }}>WEEKLY INSIGHTS</p>
+          {reports.map((report) => {
+            const date = report.timestamp ? new Date(report.timestamp.toDate()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown Date';
+            return (
+              <div key={report.id} className="glass" style={{ padding: "20px", marginBottom: 16 }}>
+                <p style={{ fontSize: 13, color: "#A855F7", fontWeight: 600, marginBottom: 12, letterSpacing: "0.05em" }}>REPORT: {date}</p>
+                <div style={{ fontSize: 15, color: "#E8EDF5", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                  {report.summary}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="label-tag" style={{ marginBottom: 8 }}>SESSION LOG</p>
       {checks.length === 0 ? (
         <div className="glass-sm history-card text-center" style={{ padding: "32px 18px", marginBottom: 10 }}>
           <p style={{ color: "#8B949E", fontSize: 14 }}>No reality checks recorded yet.</p>
