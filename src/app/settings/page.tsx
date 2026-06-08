@@ -145,6 +145,7 @@ export default function SettingsPage() {
   };
 
   const handleDeleteAccount = async () => {
+    if (!user) return;
     const confirmed = window.confirm("Are you absolutely sure you want to delete your account? This action cannot be undone.");
     if (!confirmed) return;
     try {
