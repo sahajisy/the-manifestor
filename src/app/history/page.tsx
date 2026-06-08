@@ -4,7 +4,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, doc, getDoc, deleteDoc } from 'firebase/firestore';
 
 export default function HistoryPage() {
   const { user, loading } = useAuth();
@@ -40,45 +40,16 @@ export default function HistoryPage() {
     }
   }, [user]);
 
-  const generateSampleReport = async () => {
-    if (!user) return;
-    setFetchingData(true);
-    try {
-      // Get aim
-      let aim = "Unknown";
-      const userDocSnap = await getDoc(doc(db, 'users', user.uid));
-      if (userDocSnap.exists()) {
-        aim = userDocSnap.data().aim || "Unknown";
-      }
-      
-      const res = await fetch('/api/debug/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ aim, checks })
-      });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.summary) {
-          import('firebase/firestore').then(async ({ addDoc, serverTimestamp, collection }) => {
-            await addDoc(collection(db, 'users', user.uid, 'reports'), {
-              summary: data.summary,
-              timestamp: serverTimestamp(),
-              checksCount: checks.length
-            });
-            window.location.reload();
-          });
-        } else {
-          alert("Failed to generate report. Empty summary.");
-        }
-      } else {
-        alert("Failed to generate report using backend API.");
+  const deleteReport = async (reportId: string) => {
+    if (!user) return;
+    if (window.confirm("Are you sure you want to delete this test report?")) {
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'reports', reportId));
+        setReports(prev => prev.filter(r => r.id !== reportId));
+      } catch (err) {
+        console.error("Failed to delete report", err);
       }
-    } catch (e) {
-      console.error(e);
-      alert("Error generating report.");
-    } finally {
-      setFetchingData(false);
     }
   };
 
@@ -95,12 +66,7 @@ export default function HistoryPage() {
         Your <span className="iridescent">Journey</span>
       </h2>
 
-      <button 
-        onClick={generateSampleReport} 
-        style={{ width: "100%", padding: "12px", marginBottom: 24, borderRadius: 8, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.3)", color: "#A855F7", cursor: "pointer", fontSize: 14, fontWeight: 500 }}
-      >
-        Generate Weekly Report (Debug)
-      </button>
+
 
       {reports.length > 0 && (
         <div style={{ marginBottom: 40 }}>
@@ -109,7 +75,10 @@ export default function HistoryPage() {
             const date = report.timestamp ? new Date(report.timestamp.toDate()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown Date';
             return (
               <div key={report.id} className="glass" style={{ padding: "20px", marginBottom: 16 }}>
-                <p style={{ fontSize: 13, color: "#A855F7", fontWeight: 600, marginBottom: 12, letterSpacing: "0.05em" }}>REPORT: {date}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <p style={{ fontSize: 13, color: "#A855F7", fontWeight: 600, letterSpacing: "0.05em", margin: 0 }}>REPORT: {date}</p>
+                  <button onClick={() => deleteReport(report.id)} style={{ background: 'none', border: 'none', color: '#8B949E', cursor: 'pointer', fontSize: 12, padding: "4px 8px" }}>Delete</button>
+                </div>
                 <div style={{ fontSize: 15, color: "#E8EDF5", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
                   {report.summary}
                 </div>
@@ -149,6 +118,12 @@ export default function HistoryPage() {
                 <div style={{ marginTop: 8 }}>
                   <p className="label-tag" style={{ marginBottom: 8, color: "#8B949E" }}>RECORDING</p>
                   <audio controls src={h.audioUrl} style={{ width: '100%', height: '36px', borderRadius: '12px', outline: 'none' }} className="invert brightness-110 saturate-0 opacity-80" />
+                </div>
+              )}
+              {h.transcript && (
+                <div style={{ marginTop: 12, padding: "14px", background: "rgba(255,255,255,0.03)", borderRadius: 8, borderLeft: "3px solid #A855F7" }}>
+                  <p style={{ fontSize: 11, color: "#A855F7", fontFamily: "var(--font-dm-mono), monospace", marginBottom: 6, letterSpacing: "0.05em" }}>TRANSCRIPT</p>
+                  <p style={{ fontSize: 14, color: "#E8EDF5", lineHeight: 1.6 }}>&quot;{h.transcript}&quot;</p>
                 </div>
               )}
             </div>

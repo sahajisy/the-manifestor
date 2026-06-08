@@ -4,7 +4,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, orderBy, getDocs, limit, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const MicIcon = ({ size = 24, color = "currentColor" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -100,6 +100,38 @@ export default function DashboardPage() {
             }
           });
 
+          const now = new Date();
+          const msPerDay = 1000 * 60 * 60 * 24;
+          const todayStr = getLogicalDateStr(now);
+
+          // LAZY SUNDAY: Generate weekly report automatically
+          if (docSnap.data().weeklyReport && now.getDay() === 0) {
+            const qReports = query(collection(db, 'users', user.uid, 'reports'), orderBy('timestamp', 'desc'), limit(1));
+            const snapReports = await getDocs(qReports);
+            let generatedToday = false;
+            if (!snapReports.empty) {
+              const lastReportDate = snapReports.docs[0].data().timestamp?.toDate();
+              if (lastReportDate && getLogicalDateStr(lastReportDate) === todayStr) {
+                generatedToday = true;
+              }
+            }
+            if (!generatedToday) {
+              fetch('/api/generate-weekly-report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ aim: docSnap.data().aim, checks: checks.slice(0, 7), email: user.email })
+              }).then(res => res.json()).then(data => {
+                if (data.summary) {
+                  addDoc(collection(db, 'users', user.uid, 'reports'), {
+                    summary: data.summary,
+                    timestamp: serverTimestamp(),
+                    checksCount: Math.min(checks.length, 7)
+                  });
+                }
+              }).catch(e => console.error("Lazy Sunday generation failed", e));
+            }
+          }
+
           // Calculate Accountability (Days Active / Days since creation)
           let creationDate = new Date();
           if (user.metadata && user.metadata.creationTime) {
@@ -108,15 +140,11 @@ export default function DashboardPage() {
             creationDate = checks[checks.length-1].timestamp.toDate();
           }
           
-          const now = new Date();
-          const msPerDay = 1000 * 60 * 60 * 24;
           const daysSinceCreation = Math.max(1, Math.ceil((now.getTime() - creationDate.getTime()) / msPerDay));
           const accPct = Math.round((daysSet.size / daysSinceCreation) * 100);
           setAccountability(Math.min(100, accPct));
 
-          // Calculate Streak
           let currentStreak = 0;
-          const todayStr = getLogicalDateStr(now);
           const yesterday = new Date(now.getTime() - msPerDay);
           const yesterdayStr = getLogicalDateStr(yesterday);
           

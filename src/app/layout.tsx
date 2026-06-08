@@ -2,6 +2,7 @@ import { Bebas_Neue, DM_Sans, DM_Mono } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 import { BottomNav } from '@/components/BottomNav';
+import { Background } from '@/components/Background';
 
 const bebasNeue = Bebas_Neue({ weight: '400', subsets: ['latin'], variable: '--font-bebas-neue' });
 const dmSans = DM_Sans({ weight: ['400', '500', '600'], subsets: ['latin'], variable: '--font-dm-sans' });
@@ -22,10 +23,7 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <AuthProvider>
           <div className="app-layout">
-            {/* Aurora blobs */}
-            <div className="blob blob-1" />
-            <div className="blob blob-2" />
-            <div className="blob blob-3" />
+            <Background />
             
             {/* Screen content */}
             <div style={{ position: "relative", zIndex: 1, minHeight: "100vh" }}>

@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signInWithPopup, signOut, deleteUser } from 'firebase/auth';
-import { auth, provider } from '@/lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { auth, provider, db } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
@@ -11,6 +12,7 @@ interface AuthContextType {
   login: () => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
+  settings: any;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -19,30 +21,41 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => {},
   logout: async () => {},
   deleteAccount: async () => {},
+  settings: {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<any>({});
   const router = useRouter();
 
   useEffect(() => {
-    let unsubscribe = () => {};
+    let unsubscribeAuth = () => {};
+    let unsubscribeDoc = () => {};
     
-    // Fallback timeout in case Firebase completely hangs
-    const fallbackTimeout = setTimeout(() => {
-      setLoading(false);
-    }, 3000);
+    const fallbackTimeout = setTimeout(() => setLoading(false), 3000);
 
     try {
-      unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribeAuth = onAuthStateChanged(auth, (user) => {
         clearTimeout(fallbackTimeout);
         setUser(user);
+        
+        if (user) {
+          unsubscribeDoc = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+            if (docSnap.exists()) {
+              setSettings(docSnap.data());
+            }
+          });
+        } else {
+          setSettings({});
+        }
+        
         setLoading(false);
       }, (error) => {
         clearTimeout(fallbackTimeout);
         console.error("Firebase Auth Error:", error);
-        setLoading(false); // Stop loading if it fails
+        setLoading(false);
       });
     } catch (err) {
       clearTimeout(fallbackTimeout);
@@ -56,7 +69,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       clearTimeout(fallbackTimeout);
-      unsubscribe();
+      unsubscribeAuth();
+      unsubscribeDoc();
     };
   }, []);
 
@@ -90,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, deleteAccount }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, deleteAccount, settings }}>
       {children}
     </AuthContext.Provider>
   );

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { db } from '@/lib/firebase';
+import { useAuth } from './AuthProvider';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 interface RealityCheckProps {
@@ -25,6 +26,7 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
   const [seconds, setSeconds] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [uploading, setUploading] = useState(false);
+  const { settings } = useAuth();
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -109,8 +111,10 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
   const handleToggleRecording = () => {
     if (recorded || loading) return;
     
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(50);
+    if (settings?.hapticFeedback !== false) {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(50);
+      }
     }
 
     if (pressing) {
@@ -120,23 +124,47 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
     }
   };
 
+  const convertBlobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+  };
+
   const submitAnswer = async () => {
     if (!audioBlob || !question) return;
     setUploading(true);
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
-      reader.onloadend = () => {
-        const base64Audio = reader.result;
-        // Fire and forget for INSTANT user experience
-        addDoc(collection(db, 'users', userId, 'checks'), {
-          question,
-          audioUrl: base64Audio,
-          timestamp: serverTimestamp(),
-        }).catch(err => console.error("Background sync error:", err));
-        
-        onComplete(); 
-      };
+      const base64Audio = await convertBlobToBase64(audioBlob);
+      
+      let transcript = "";
+      if (settings?.autoTranscribe !== false) {
+        try {
+          const formData = new FormData();
+          formData.append('file', audioBlob);
+          const res = await fetch('/api/transcribe', {
+            method: 'POST',
+            body: formData
+          });
+          if (res.ok) {
+            const data = await res.json();
+            transcript = data.transcript || "";
+          }
+        } catch (err) {
+          console.error("Transcription failed", err);
+        }
+      }
+
+      addDoc(collection(db, 'users', userId, 'checks'), {
+        question,
+        audioUrl: base64Audio,
+        transcript,
+        timestamp: serverTimestamp(),
+      }).catch(err => console.error("Background sync error:", err));
+      
+      onComplete(); 
     } catch (error) {
       console.error("Error preparing answer:", error);
       alert("Failed to process audio.");

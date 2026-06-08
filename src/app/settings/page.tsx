@@ -38,28 +38,19 @@ function Toggle({ label, sub, defaultOn, on, onChange }: { label: string, sub?: 
 }
 
 export default function SettingsPage() {
-  const { user, loading, logout, deleteAccount } = useAuth();
+  const { user, loading, logout, deleteAccount, settings } = useAuth();
   const router = useRouter();
   
   const [aim, setAim] = useState("");
-  const [weeklyReport, setWeeklyReport] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
-    } else if (user) {
-      const fetchAim = async () => {
-        const docSnap = await getDoc(doc(db, 'users', user.uid));
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          if (data.aim) setAim(data.aim);
-          if (data.weeklyReport !== undefined) setWeeklyReport(data.weeklyReport);
-        }
-      };
-      fetchAim();
+    } else if (user && settings && settings.aim && !aim) {
+      setAim(settings.aim);
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, settings, aim]);
 
   const handleUpdateAim = async () => {
     if (!user || !aim.trim()) return;
@@ -77,33 +68,79 @@ export default function SettingsPage() {
 
   const handleCompleteGoal = async () => {
     if (!user || !aim.trim()) return;
-    const confirmed = window.confirm("Mark this goal as completed? You will be able to set a new Ultimate Aim.");
+    const confirmed = window.confirm("Mark this goal as completed? Your records will be exported as a ZIP and then permanently deleted.");
     if (!confirmed) return;
     
     setSaving(true);
     try {
+      const JSZip = (await import('jszip')).default;
+      const { saveAs } = await import('file-saver');
+      const { collection, query, getDocs } = await import('firebase/firestore');
+
+      const checksSnap = await getDocs(query(collection(db, 'users', user.uid, 'checks')));
+      const reportsSnap = await getDocs(query(collection(db, 'users', user.uid, 'reports')));
+      
+      const zip = new JSZip();
+      const audioFolder = zip.folder("Audio Recordings");
+      
+      let textLog = `# Archive: ${aim}\n\n`;
+      
+      textLog += `## WEEKLY INSIGHTS\n\n`;
+      reportsSnap.docs.forEach((d) => {
+        const data = d.data();
+        const dateStr = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleDateString() : 'Unknown Date';
+        textLog += `--- Report: ${dateStr} ---\n${data.summary}\n\n`;
+      });
+      
+      textLog += `## REALITY CHECKS\n\n`;
+      checksSnap.docs.forEach((d, i) => {
+        const data = d.data();
+        const dateObj = data.timestamp ? data.timestamp.toDate() : new Date();
+        const dateStr = dateObj.toLocaleString().replace(/[\/\:, ]/g, '_');
+        
+        textLog += `--- Session: ${dateObj.toLocaleString()} ---\n`;
+        textLog += `Question: ${data.question}\n`;
+        if (data.transcript) {
+          textLog += `Transcript: ${data.transcript}\n`;
+        }
+        textLog += `\n`;
+        
+        if (data.audioUrl && audioFolder) {
+          const base64Data = data.audioUrl.split(',')[1];
+          if (base64Data) {
+            audioFolder.file(`session_${dateStr}_${i}.webm`, base64Data, { base64: true });
+          }
+        }
+      });
+      
+      zip.file("Journey_Log.txt", textLog);
+      
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      saveAs(zipBlob, `${aim.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_archive.zip`);
+      
+      await Promise.all(checksSnap.docs.map(d => deleteDoc(doc(db, 'users', user.uid, 'checks', d.id))));
+      await Promise.all(reportsSnap.docs.map(d => deleteDoc(doc(db, 'users', user.uid, 'reports', d.id))));
+
       await updateDoc(doc(db, 'users', user.uid), {
         completedGoals: arrayUnion(aim.trim()),
         aim: ""
       });
       setAim("");
-      alert("Goal marked as completed! You can now set a new one.");
+      alert("Goal completed, exported, and cleanly wiped!");
     } catch (e) {
       console.error(e);
-      alert("Failed to complete goal.");
+      alert("Failed to complete goal and export archive.");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleToggleWeeklyReport = async (val: boolean) => {
-    setWeeklyReport(val);
-    if (user) {
-      try {
-        await updateDoc(doc(db, 'users', user.uid), { weeklyReport: val });
-      } catch (e) {
-        console.error("Failed to update weekly report preference", e);
-      }
+  const handleToggle = async (key: string, val: boolean) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { [key]: val });
+    } catch (e) {
+      console.error(`Failed to update ${key}`, e);
     }
   };
 
@@ -161,9 +198,9 @@ export default function SettingsPage() {
 
       <div className="glass" style={{ padding: "20px", marginBottom: 16 }}>
         <p className="label-tag" style={{ marginBottom: 2 }}>NOTIFICATIONS</p>
-        <Toggle label="Daily Reminder" sub="Push notification at your chosen time" defaultOn={true} />
-        <Toggle label="Streak Alerts" sub="Know when your streak is at risk" defaultOn={true} />
-        <Toggle label="Weekly Report" sub="Summary every Sunday morning" on={weeklyReport} onChange={handleToggleWeeklyReport} />
+        <Toggle label="Daily Reminder" sub="Push notification at your chosen time" on={settings?.dailyReminder ?? true} onChange={(v) => handleToggle('dailyReminder', v)} />
+        <Toggle label="Streak Alerts" sub="Know when your streak is at risk" on={settings?.streakAlerts ?? true} onChange={(v) => handleToggle('streakAlerts', v)} />
+        <Toggle label="Weekly Report" sub="Summary every Sunday morning" on={settings?.weeklyReport ?? false} onChange={(v) => handleToggle('weeklyReport', v)} />
       </div>
 
       <div className="glass" style={{ padding: "20px", marginBottom: 16 }}>
@@ -180,9 +217,9 @@ export default function SettingsPage() {
 
       <div className="glass" style={{ padding: "20px", marginBottom: 24 }}>
         <p className="label-tag" style={{ marginBottom: 2 }}>APPEARANCE</p>
-        <Toggle label="Haptic Feedback" sub="Vibration on button presses" defaultOn={true} />
-        <Toggle label="Ambient Animations" sub="Aurora background effects" defaultOn={true} />
-        <Toggle label="Auto-Transcribe" sub="Convert recordings to text via AI" />
+        <Toggle label="Haptic Feedback" sub="Vibration on button presses" on={settings?.hapticFeedback ?? true} onChange={(v) => handleToggle('hapticFeedback', v)} />
+        <Toggle label="Ambient Animations" sub="Aurora background effects" on={settings?.ambientAnimations ?? true} onChange={(v) => handleToggle('ambientAnimations', v)} />
+        <Toggle label="Auto-Transcribe" sub="Convert recordings to text via AI" on={settings?.autoTranscribe ?? true} onChange={(v) => handleToggle('autoTranscribe', v)} />
       </div>
 
       <button onClick={() => router.push('/developer')} className="glass" style={{ width: "100%", padding: "16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#E8EDF5", border: "1px solid rgba(255, 255, 255, 0.1)", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.032)"}>
