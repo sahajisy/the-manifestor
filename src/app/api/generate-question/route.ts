@@ -11,8 +11,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Aim is required' }, { status: 400 });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    
     let tonePrompt = '';
     switch(intensity.toLowerCase()) {
       case 'light':
@@ -37,16 +35,61 @@ Generate ONE short, probing reality-check question to ask the user right now abo
 ${tonePrompt}
 Return only the question text. Do not include quotes around it.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
-    });
+    let question = "";
 
-    const question = response.text || "Are you actually working towards your aim, or just pretending?";
+    try {
+      // 1. Try Primary API (Google Gemini)
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: prompt,
+      });
+      question = response.text || "";
+    } catch (primaryError) {
+      console.warn("Primary API (Gemini) failed. Falling back...", primaryError);
+
+      try {
+        // 2. Try Secondary API Fallback (e.g., Groq with Llama 3)
+        // Make sure to add GROQ_API_KEY to your .env.local file
+        const fallbackRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'llama-3.1-8b-instant',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7,
+            max_tokens: 100
+          })
+        });
+
+        if (!fallbackRes.ok) {
+          const errorText = await fallbackRes.text();
+          throw new Error(`Fallback API failed: ${fallbackRes.status} - ${errorText}`);
+        }
+
+        const data = await fallbackRes.json();
+        question = data.choices[0].message.content.trim();
+      } catch (fallbackError) {
+        console.error("Both primary and fallback APIs failed!", fallbackError);
+        // 3. Ultimate Hardcoded Fallback
+        question = "Are you actually working towards your aim today, or just pretending?";
+      }
+    }
+
+    if (!question) {
+      question = "Are you actually working towards your aim today, or just pretending?";
+    }
+
+    // Clean up quotes if the model accidentally included them
+    question = question.replace(/^["']|["']$/g, '');
 
     return NextResponse.json({ question });
   } catch (error) {
-    console.error("AI Generation error:", error);
-    return NextResponse.json({ error: 'Failed to generate question' }, { status: 500 });
+    console.error("AI Generation route error:", error);
+    return NextResponse.json({ error: 'Failed to process request' }, { status: 500 });
   }
 }
+

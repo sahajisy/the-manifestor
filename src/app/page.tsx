@@ -82,8 +82,9 @@ export default function WelcomePage() {
         </button>
       </div>
 
-      <p style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,.15)", marginTop: 40, letterSpacing: ".06em", fontFamily: "var(--font-dm-mono),monospace", textTransform: "uppercase" }}>
-        The Manifestor · Build Your Best Self
+      <p style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,.15)", marginTop: 40, letterSpacing: ".06em", fontFamily: "var(--font-dm-mono),monospace", textTransform: "uppercase", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" }}>
+        <span>The Manifestor · Build Your Best Self</span>
+        <a href="/developer" style={{ color: "rgba(255,255,255,.3)", textDecoration: "none", transition: "color 0.2s", textTransform: "none", fontSize: "12px" }} onMouseEnter={e => e.currentTarget.style.color="rgba(255,255,255,.8)"} onMouseLeave={e => e.currentTarget.style.color="rgba(255,255,255,.3)"}>About the Developer</a>
       </p>
     </div>
   );

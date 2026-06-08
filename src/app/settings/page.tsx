@@ -114,6 +114,15 @@ export default function SettingsPage() {
         <Toggle label="Auto-Transcribe" sub="Convert recordings to text via AI" />
       </div>
 
+      <button onClick={() => router.push('/developer')} className="glass" style={{ width: "100%", padding: "16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#E8EDF5", border: "1px solid rgba(255, 255, 255, 0.1)", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.032)"}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span style={{ fontSize: 15, fontWeight: 500 }}>About Developer</span>
+      </button>
+
       <button onClick={logout} className="glass" style={{ width: "100%", padding: "16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#FF6B6B", border: "1px solid rgba(255, 107, 107, 0.2)", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255, 107, 107, 0.1)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.032)"}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
