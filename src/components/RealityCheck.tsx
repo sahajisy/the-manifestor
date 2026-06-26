@@ -5,6 +5,7 @@ import { db, storage } from '@/lib/firebase';
 import { useAuth } from './AuthProvider';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { VoiceRecorder } from 'capacitor-voice-recorder';
 
 interface RealityCheckProps {
   userId: string;
@@ -84,23 +85,42 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
   const startRecording = async () => {
     if (recorded) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      audioChunksRef.current = [];
+      let isNative = false;
+      try {
+        const canRecord = await VoiceRecorder.canDeviceVoiceRecord();
+        isNative = canRecord.value;
+      } catch (e) {
+        // web fallback throws unimplemented
+        isNative = false;
+      }
 
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
+      if (isNative) {
+        const perm = await VoiceRecorder.hasAudioRecordingPermission();
+        if (!perm.value) {
+          const req = await VoiceRecorder.requestAudioRecordingPermission();
+          if (!req.value) throw new Error("Permission denied");
         }
-      };
+        await VoiceRecorder.startRecording();
+      } else {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorderRef.current = new MediaRecorder(stream);
+        audioChunksRef.current = [];
 
-      mediaRecorderRef.current.onstop = () => {
-        const mimeType = mediaRecorderRef.current?.mimeType || '';
-        const blob = new Blob(audioChunksRef.current, { type: mimeType });
-        setAudioBlob(blob);
-      };
+        mediaRecorderRef.current.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
 
-      mediaRecorderRef.current.start();
+        mediaRecorderRef.current.onstop = () => {
+          const mimeType = mediaRecorderRef.current?.mimeType || '';
+          const blob = new Blob(audioChunksRef.current, { type: mimeType });
+          setAudioBlob(blob);
+        };
+
+        mediaRecorderRef.current.start();
+      }
+      
       setPressing(true);
       timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
     } catch (err) {
@@ -109,13 +129,32 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && pressing) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+  const stopRecording = async () => {
+    if (pressing) {
       setPressing(false);
       if (timerRef.current) clearInterval(timerRef.current);
       if (seconds > 0) setRecorded(true);
+
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      } else {
+        try {
+          const result = await VoiceRecorder.stopRecording();
+          if (result.value && result.value.recordDataBase64) {
+            const byteCharacters = atob(result.value.recordDataBase64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: result.value.mimeType || 'audio/webm' });
+            setAudioBlob(blob);
+          }
+        } catch (e) {
+          console.error("Failed to stop native recorder", e);
+        }
+      }
     }
   };
 

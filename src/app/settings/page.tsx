@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore';
+import { NoQuitModal } from '@/components/NoQuitModal';
 
 function Toggle({ label, sub, defaultOn, on, onChange }: { label: string, sub?: string, defaultOn?: boolean, on?: boolean, onChange?: (val: boolean) => void }) {
   const [internalOn, setInternalOn] = useState(defaultOn ?? false);
@@ -43,6 +44,7 @@ export default function SettingsPage() {
   
   const [aim, setAim] = useState("");
   const [saving, setSaving] = useState(false);
+  const [quitAction, setQuitAction] = useState<'logout' | 'delete' | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -156,20 +158,22 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (!user) return;
-    const confirmed = window.confirm("Are you absolutely sure you want to delete your account? This action cannot be undone.");
-    if (!confirmed) return;
-    try {
-      await deleteDoc(doc(db, 'users', user.uid));
-      await deleteAccount();
-    } catch (error: any) {
-      if (error?.code === 'auth/requires-recent-login') {
-        alert("Please sign out and sign in again before deleting your account.");
-      } else {
-        alert("Failed to delete account. " + (error?.message || ""));
+  const executeQuitAction = async () => {
+    if (quitAction === 'logout') {
+      await logout();
+    } else if (quitAction === 'delete') {
+      try {
+        await deleteDoc(doc(db, 'users', user.uid));
+        await deleteAccount();
+      } catch (error: any) {
+        if (error?.code === 'auth/requires-recent-login') {
+          alert("Please sign out and sign in again before deleting your account.");
+        } else {
+          alert("Failed to delete account. " + (error?.message || ""));
+        }
       }
     }
+    setQuitAction(null);
   };
 
   if (loading || !user) return null;
@@ -244,7 +248,7 @@ export default function SettingsPage() {
         <span style={{ fontSize: 15, fontWeight: 500 }}>About Developer</span>
       </button>
 
-      <button onClick={logout} className="glass" style={{ width: "100%", padding: "16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#FF6B6B", border: "1px solid rgba(255, 107, 107, 0.2)", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255, 107, 107, 0.1)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.032)"}>
+      <button onClick={() => setQuitAction('logout')} className="glass" style={{ width: "100%", padding: "16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#FF6B6B", border: "1px solid rgba(255, 107, 107, 0.2)", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255, 107, 107, 0.1)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.032)"}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
           <polyline points="16 17 21 12 16 7"></polyline>
@@ -253,7 +257,7 @@ export default function SettingsPage() {
         <span style={{ fontSize: 15, fontWeight: 500 }}>Sign Out</span>
       </button>
 
-      <button onClick={handleDeleteAccount} className="glass" style={{ width: "100%", padding: "16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#FF4444", border: "1px solid rgba(255, 68, 68, 0.3)", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255, 68, 68, 0.15)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.032)"}>
+      <button onClick={() => setQuitAction('delete')} className="glass" style={{ width: "100%", padding: "16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#FF4444", border: "1px solid rgba(255, 68, 68, 0.3)", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255, 68, 68, 0.15)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.032)"}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M3 6h18"></path>
           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -262,6 +266,14 @@ export default function SettingsPage() {
         </svg>
         <span style={{ fontSize: 15, fontWeight: 500 }}>Delete Account</span>
       </button>
+
+      {quitAction && (
+        <NoQuitModal 
+          action={quitAction} 
+          onProceed={executeQuitAction} 
+          onCancel={() => setQuitAction(null)} 
+        />
+      )}
     </div>
   );
 }
