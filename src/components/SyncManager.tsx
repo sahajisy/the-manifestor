@@ -33,6 +33,7 @@ export function SyncManager() {
             // Transcribe if needed - for simplicity we just update the URL for now
             // or we could ping the transcribe API here using the blob
             let transcript = "";
+            let sentimentScore = null;
             try {
               const formData = new FormData();
               formData.append('file', item.audioBlob);
@@ -43,15 +44,36 @@ export function SyncManager() {
               if (res.ok) {
                 const data = await res.json();
                 transcript = data.transcript || "";
+
+                if (transcript) {
+                  // Wait, how do we get the aim here?
+                  // We don't have aim stored in the item queue.
+                  // Since we are inside the client, we could fetch it from the user doc, but it's easier to just pass "Unknown aim" and let Gemini guess from transcript, or skip sentiment for background sync for now.
+                  // Let's fetch the aim from Firestore since we have userId.
+                  const { getDoc } = await import('firebase/firestore');
+                  const userDoc = await getDoc(doc(db, 'users', item.userId));
+                  const aim = userDoc.exists() ? userDoc.data().aim : "Goal";
+
+                  const sentimentRes = await fetch('/api/analyze-sentiment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ aim, transcript })
+                  });
+                  if (sentimentRes.ok) {
+                    const sentimentData = await sentimentRes.json();
+                    sentimentScore = sentimentData.score;
+                  }
+                }
               }
             } catch (err) {
-              console.error("Transcription failed during sync", err);
+              console.error("Transcription/Sentiment failed during sync", err);
             }
 
             // Update Firestore document
             const docRef = doc(db, 'users', item.userId, 'checks', item.id);
             const updatePayload: any = { audioUrl: downloadUrl };
             if (transcript) updatePayload.transcript = transcript;
+            if (sentimentScore !== null) updatePayload.sentimentScore = sentimentScore;
             
             await updateDoc(docRef, updatePayload);
 

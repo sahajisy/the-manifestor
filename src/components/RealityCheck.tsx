@@ -166,6 +166,7 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
       }
       
       let transcript = "";
+      let sentimentScore = null;
       if (settings?.autoTranscribe !== false && !uploadFailed) {
         try {
           const formData = new FormData();
@@ -177,24 +178,66 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
           if (res.ok) {
             const data = await res.json();
             transcript = data.transcript || "";
+            
+            // Fetch sentiment if we got a transcript
+            if (transcript) {
+              const sentimentRes = await fetch('/api/analyze-sentiment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ aim, transcript })
+              });
+              if (sentimentRes.ok) {
+                const sentimentData = await sentimentRes.json();
+                sentimentScore = sentimentData.score;
+              }
+            }
           }
         } catch (err) {
-          console.error("Transcription failed", err);
+          console.error("Transcription/Sentiment failed", err);
         }
       }
 
-      const docRef = await addDoc(collection(db, 'users', userId, 'checks'), {
+      const docPayload: any = {
         question,
         audioUrl: downloadUrl,
         transcript,
         timestamp: serverTimestamp(),
-      });
+      };
+      
+      if (sentimentScore !== null) {
+        docPayload.sentimentScore = sentimentScore;
+      }
+
+      const docRef = await addDoc(collection(db, 'users', userId, 'checks'), docPayload);
 
       if (uploadFailed) {
         const { enqueueAudio } = await import('@/lib/offlineQueue');
         await enqueueAudio(docRef.id, userId, audioFileName, audioBlob);
       }
       
+      // Schedule next notification in 24 hours using Capacitor
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications');
+        const permStatus = await LocalNotifications.checkPermissions();
+        if (permStatus.display !== 'granted') {
+          await LocalNotifications.requestPermissions();
+        }
+        
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              title: "The Clock is Ticking",
+              body: `It's been 24 hours since your last Reality Check. Don't make excuses today.`,
+              id: 1,
+              schedule: { at: new Date(Date.now() + 1000 * 60 * 60 * 24) }, // 24 hours from now
+              sound: 'beep.wav',
+            }
+          ]
+        });
+      } catch (err) {
+        console.warn("LocalNotifications not available (likely web environment)", err);
+      }
+
       onComplete(); 
     } catch (error) {
       console.error("Error preparing answer:", error);

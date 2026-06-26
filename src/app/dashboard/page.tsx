@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, collection, query, orderBy, getDocs, limit, addDoc, serverTimestamp } from 'firebase/firestore';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const MicIcon = ({ size = 24, color = "currentColor" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -31,6 +32,7 @@ export default function DashboardPage() {
   const [accountability, setAccountability] = useState(0);
   const [weeklyStatus, setWeeklyStatus] = useState<boolean[]>([false, false, false, false, false, false, false]);
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
+  const [sentimentHistory, setSentimentHistory] = useState<{date: string, score: number}[]>([]);
   
   // Session UI logic
   const [sessionDone, setSessionDone] = useState(false);
@@ -103,11 +105,27 @@ export default function DashboardPage() {
           };
 
           const daysSet = new Set<string>();
+          const sentimentData: {date: string, score: number}[] = [];
+          
           checks.forEach(c => {
             if (c.timestamp) {
-              daysSet.add(getLogicalDateStr(c.timestamp.toDate()));
+              const dateStr = getLogicalDateStr(c.timestamp.toDate());
+              daysSet.add(dateStr);
+              if (typeof c.sentimentScore === 'number') {
+                // To keep it simple, just take the first score per day, or average them.
+                // Since checks are descending, this pushes the latest check of the day.
+                // If we want chronological order for the chart, we reverse it later.
+                sentimentData.push({
+                  date: `${c.timestamp.toDate().getMonth()+1}/${c.timestamp.toDate().getDate()}`,
+                  score: c.sentimentScore
+                });
+              }
             }
           });
+
+          // Sort sentiment data chronologically (oldest to newest)
+          sentimentData.reverse();
+          setSentimentHistory(sentimentData);
 
           const now = new Date();
           const msPerDay = 1000 * 60 * 60 * 24;
@@ -305,7 +323,7 @@ export default function DashboardPage() {
       )}
 
       {/* Weekly Progress */}
-      <div className="glass" style={{ padding: "20px" }}>
+      <div className="glass" style={{ padding: "20px", marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <p className="label-tag">WEEKLY PROGRESS</p>
           <span style={{ fontSize: 12, color: "#00F5FF" }}>{weeklyStatus.filter(Boolean).length} / 7 days</span>
@@ -328,6 +346,37 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* Sentiment Analytics */}
+      {sentimentHistory.length > 0 && (
+        <div className="glass" style={{ padding: "20px", marginBottom: 24 }}>
+          <p className="label-tag" style={{ marginBottom: 16 }}>MOMENTUM & SENTIMENT</p>
+          <div style={{ width: '100%', height: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={sentimentHistory}>
+                <XAxis dataKey="date" stroke="#8B949E" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis domain={[0, 100]} hide />
+                <Tooltip
+                  contentStyle={{ background: '#1c2128', border: '1px solid #30363d', borderRadius: 8, fontSize: 12, color: '#C8D0DC' }}
+                  itemStyle={{ color: '#00F5FF' }}
+                  labelStyle={{ color: '#8B949E', marginBottom: 4 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#A855F7"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: '#A855F7', strokeWidth: 0 }}
+                  activeDot={{ r: 6, fill: '#00F5FF' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <p style={{ fontSize: 12, color: "#8B949E", textAlign: "center", marginTop: 12 }}>
+            Analyzed by AI based on your raw accountability transcripts.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
