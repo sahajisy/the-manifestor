@@ -45,8 +45,7 @@ export function BiometricVault({ children }: { children: React.ReactNode }) {
       await BiometricAuth.authenticate({
         reason: 'Unlock The Manifestor',
         cancelTitle: 'Cancel',
-        allowDeviceCredential: true,
-        resumeTimeout: 1, // Require auth immediately upon resume
+        allowDeviceCredential: true
       });
       setLocked(false);
     } catch (e) {
