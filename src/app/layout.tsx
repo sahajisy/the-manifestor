@@ -28,7 +28,7 @@ export default function RootLayout({
             <Background />
             
             {/* Screen content */}
-            <div style={{ position: "relative", zIndex: 1, minHeight: "100vh" }}>
+            <div className="scroll-content">
               {children}
             </div>
 
