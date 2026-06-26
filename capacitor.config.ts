@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'the-manifestor',
   webDir: 'out',
   server: {
-    url: 'http://10.0.2.2:3000',
+    url: 'https://the-manifestor.sahajbalgunde.com/',
     cleartext: true
   }
 };
