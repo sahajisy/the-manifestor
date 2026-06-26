@@ -60,18 +60,27 @@ export default function DashboardPage() {
               setDaysRemaining(diffDays > 0 ? diffDays : 0);
             }
 
-            // BACKGROUND PREFETCH: Generate tomorrow's question now so it's instant later
+            // BACKGROUND PREFETCH: Generate fallback questions for offline use
             const currentAim = docSnap.data().aim;
             const currentIntensity = docSnap.data().intensity || 'Harsh';
-            const cached = sessionStorage.getItem('cachedQuestion');
-            if (!cached || JSON.parse(cached).aim !== currentAim) {
+            const cached = localStorage.getItem('fallbackQuestions');
+            let questionsList: { aim: string, question: string }[] = [];
+            try {
+              if (cached) {
+                questionsList = JSON.parse(cached);
+                questionsList = questionsList.filter((q: any) => q.aim === currentAim);
+              }
+            } catch (e) {}
+
+            if (questionsList.length < 3 && navigator.onLine) {
               fetch('/api/generate-question', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ aim: currentAim, intensity: currentIntensity }),
               }).then(r => r.json()).then(data => {
                 if (data.question) {
-                  sessionStorage.setItem('cachedQuestion', JSON.stringify({ aim: currentAim, question: data.question }));
+                  questionsList.push({ aim: currentAim, question: data.question });
+                  localStorage.setItem('fallbackQuestions', JSON.stringify(questionsList));
                 }
               }).catch(() => {});
             }

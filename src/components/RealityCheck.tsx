@@ -40,13 +40,23 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
   }, []);
 
   const generateQuestion = async () => {
-    const cached = sessionStorage.getItem('cachedQuestion');
+    const cached = localStorage.getItem('fallbackQuestions');
     if (cached) {
       try {
-        const parsed = JSON.parse(cached);
-        if (parsed.aim === aim) {
-          setQuestion(parsed.question);
-          sessionStorage.removeItem('cachedQuestion');
+        let questionsList: { aim: string, question: string }[] = JSON.parse(cached);
+        const validQuestions = questionsList.filter(q => q.aim === aim);
+        
+        if (validQuestions.length > 0) {
+          // Take the first valid question and remove it from the list
+          const selected = validQuestions[0];
+          setQuestion(selected.question);
+          
+          // Remove it from the overall list and save back
+          const updatedList = questionsList.filter(q => q.question !== selected.question);
+          localStorage.setItem('fallbackQuestions', JSON.stringify(updatedList));
+          
+          // Note: If we are online, we could fetch a replacement. For now, just use it.
+          // If offline, this is perfectly handled.
           return;
         }
       } catch (e) {}
@@ -141,18 +151,22 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
       const base64Audio = await convertBlobToBase64(audioBlob);
       
       let downloadUrl = "";
+      let uploadFailed = false;
+      const audioFileName = `audios/${userId}/${Date.now()}.webm`;
+      
       try {
-        const audioFileName = `audios/${userId}/${Date.now()}.webm`;
+        if (!navigator.onLine) throw new Error("Offline");
         const storageRef = ref(storage, audioFileName);
         await uploadString(storageRef, base64Audio, 'data_url');
         downloadUrl = await getDownloadURL(storageRef);
       } catch (err) {
-        console.error("Storage upload failed, fallback to base64", err);
-        downloadUrl = base64Audio;
+        console.error("Storage upload failed, queuing for background sync", err);
+        uploadFailed = true;
+        downloadUrl = "OFFLINE_QUEUED"; // Placeholder
       }
       
       let transcript = "";
-      if (settings?.autoTranscribe !== false) {
+      if (settings?.autoTranscribe !== false && !uploadFailed) {
         try {
           const formData = new FormData();
           formData.append('file', audioBlob);
@@ -169,12 +183,17 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
         }
       }
 
-      await addDoc(collection(db, 'users', userId, 'checks'), {
+      const docRef = await addDoc(collection(db, 'users', userId, 'checks'), {
         question,
         audioUrl: downloadUrl,
         transcript,
         timestamp: serverTimestamp(),
       });
+
+      if (uploadFailed) {
+        const { enqueueAudio } = await import('@/lib/offlineQueue');
+        await enqueueAudio(docRef.id, userId, audioFileName, audioBlob);
+      }
       
       onComplete(); 
     } catch (error) {
