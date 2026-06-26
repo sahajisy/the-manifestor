@@ -28,7 +28,7 @@ export function NoQuitModal({ action, onProceed, onCancel }: NoQuitModalProps) {
       const res = await fetch('/api/no-quit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason, aim: user?.aim })
+        body: JSON.stringify({ reason, aim: settings?.aim })
       });
       
       const data = await res.json();
