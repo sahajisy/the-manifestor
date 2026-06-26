@@ -93,7 +93,8 @@ export default function SettingsPage() {
       });
       
       textLog += `## REALITY CHECKS\n\n`;
-      checksSnap.docs.forEach((d, i) => {
+      let i = 0;
+      for (const d of checksSnap.docs) {
         const data = d.data();
         const dateObj = data.timestamp ? data.timestamp.toDate() : new Date();
         const dateStr = dateObj.toLocaleString().replace(/[\/\:, ]/g, '_');
@@ -106,12 +107,23 @@ export default function SettingsPage() {
         textLog += `\n`;
         
         if (data.audioUrl && audioFolder) {
-          const base64Data = data.audioUrl.split(',')[1];
-          if (base64Data) {
-            audioFolder.file(`session_${dateStr}_${i}.webm`, base64Data, { base64: true });
+          if (data.audioUrl.startsWith('data:')) {
+            const base64Data = data.audioUrl.split(',')[1];
+            if (base64Data) {
+              audioFolder.file(`session_${dateStr}_${i}.webm`, base64Data, { base64: true });
+            }
+          } else if (data.audioUrl.startsWith('http')) {
+            try {
+              const res = await fetch(data.audioUrl);
+              const blob = await res.blob();
+              audioFolder.file(`session_${dateStr}_${i}.webm`, blob);
+            } catch (err) {
+              console.error("Failed to fetch audio for export", err);
+            }
           }
         }
-      });
+        i++;
+      }
       
       zip.file("Journey_Log.txt", textLog);
       

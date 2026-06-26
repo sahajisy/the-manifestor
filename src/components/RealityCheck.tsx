@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { useAuth } from './AuthProvider';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 
 interface RealityCheckProps {
   userId: string;
@@ -139,6 +140,17 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
     try {
       const base64Audio = await convertBlobToBase64(audioBlob);
       
+      let downloadUrl = "";
+      try {
+        const audioFileName = `audios/${userId}/${Date.now()}.webm`;
+        const storageRef = ref(storage, audioFileName);
+        await uploadString(storageRef, base64Audio, 'data_url');
+        downloadUrl = await getDownloadURL(storageRef);
+      } catch (err) {
+        console.error("Storage upload failed, fallback to base64", err);
+        downloadUrl = base64Audio;
+      }
+      
       let transcript = "";
       if (settings?.autoTranscribe !== false) {
         try {
@@ -157,12 +169,12 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
         }
       }
 
-      addDoc(collection(db, 'users', userId, 'checks'), {
+      await addDoc(collection(db, 'users', userId, 'checks'), {
         question,
-        audioUrl: base64Audio,
+        audioUrl: downloadUrl,
         transcript,
         timestamp: serverTimestamp(),
-      }).catch(err => console.error("Background sync error:", err));
+      });
       
       onComplete(); 
     } catch (error) {
