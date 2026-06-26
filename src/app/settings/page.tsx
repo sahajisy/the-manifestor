@@ -159,6 +159,7 @@ export default function SettingsPage() {
   };
 
   const executeQuitAction = async () => {
+    if (!user) return;
     if (quitAction === 'logout') {
       await logout();
     } else if (quitAction === 'delete') {
