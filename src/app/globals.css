@@ -16,17 +16,15 @@
   }
 }
 
-/* Mobile-only constrained layout */
+/* Full screen layout */
 .app-layout {
   position: relative;
   width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
   height: 100dvh;
   display: flex;
   flex-direction: column;
   background-color: #02040A;
-  overflow: hidden; /* Force constraint so scroll-content can scroll */
+  overflow: hidden; /* So scroll-content handles scrolling */
 }
 
 .scroll-content {
