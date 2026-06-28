@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { db, storage } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { useAuth } from './AuthProvider';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { VoiceRecorder } from 'capacitor-voice-recorder';
 
 interface RealityCheckProps {
@@ -189,24 +188,9 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
     try {
       const base64Audio = await convertBlobToBase64(audioBlob);
       
-      let downloadUrl = "";
-      let uploadFailed = false;
-      const audioFileName = `audios/${userId}/${Date.now()}.webm`;
-      
-      try {
-        if (!navigator.onLine) throw new Error("Offline");
-        const storageRef = ref(storage, audioFileName);
-        await uploadString(storageRef, base64Audio, 'data_url');
-        downloadUrl = await getDownloadURL(storageRef);
-      } catch (err) {
-        console.error("Storage upload failed, queuing for background sync", err);
-        uploadFailed = true;
-        downloadUrl = "OFFLINE_QUEUED"; // Placeholder
-      }
-      
       let transcript = "";
       let sentimentScore = null;
-      if (settings?.autoTranscribe !== false && !uploadFailed) {
+      if (settings?.autoTranscribe !== false) {
         try {
           const formData = new FormData();
           formData.append('file', audioBlob);
@@ -238,7 +222,7 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
 
       const docPayload: any = {
         question,
-        audioUrl: downloadUrl,
+        audioUrl: base64Audio,
         transcript,
         timestamp: serverTimestamp(),
       };
@@ -247,12 +231,7 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
         docPayload.sentimentScore = sentimentScore;
       }
 
-      const docRef = await addDoc(collection(db, 'users', userId, 'checks'), docPayload);
-
-      if (uploadFailed) {
-        const { enqueueAudio } = await import('@/lib/offlineQueue');
-        await enqueueAudio(docRef.id, userId, audioFileName, audioBlob);
-      }
+      await addDoc(collection(db, 'users', userId, 'checks'), docPayload);
       
       // Schedule next notification in 24 hours using Capacitor
       try {
