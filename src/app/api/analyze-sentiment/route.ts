@@ -24,41 +24,42 @@ Return ONLY a valid JSON object with a single key "score" containing the integer
     let score = 50;
 
     try {
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-      const response = await model.generateContent(prompt);
-      const text = response.response.text() || "{}";
+      const primaryRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama3-8b-8192',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 50
+        })
+      });
+
+      if (!primaryRes.ok) {
+        throw new Error(`Primary API (Groq) failed: ${primaryRes.status}`);
+      }
+      const data = await primaryRes.json();
+      const text = data.choices[0].message.content.trim();
       const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleaned);
       if (typeof parsed.score === 'number') {
         score = parsed.score;
       }
     } catch (err) {
-      console.warn("Primary API failed.", err);
+      console.warn("Primary API (Groq) failed. Falling back to Gemini...", err);
       // Fallback
       try {
-        const fallbackRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.1,
-            max_tokens: 50
-          })
-        });
-
-        if (fallbackRes.ok) {
-          const data = await fallbackRes.json();
-          const text = data.choices[0].message.content.trim();
-          const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
-          const parsed = JSON.parse(cleaned);
-          if (typeof parsed.score === 'number') {
-            score = parsed.score;
-          }
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const response = await model.generateContent(prompt);
+        const text = response.response.text() || "{}";
+        const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        if (typeof parsed.score === 'number') {
+          score = parsed.score;
         }
       } catch (fallbackErr) {
         console.error("Fallback API failed too", fallbackErr);

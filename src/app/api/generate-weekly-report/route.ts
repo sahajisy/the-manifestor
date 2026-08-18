@@ -22,33 +22,33 @@ Format it in simple markdown. Keep it under 200 words.`;
     let summary = "";
 
     try {
-      const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-      const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      const response = await model.generateContent(prompt);
-      summary = response.response.text() || "";
+      const primaryRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama3-8b-8192',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          max_tokens: 300
+        })
+      });
+
+      if (!primaryRes.ok) {
+        throw new Error(`Primary API (Groq) failed: ${primaryRes.status}`);
+      }
+
+      const data = await primaryRes.json();
+      summary = data.choices[0].message.content.trim();
     } catch (err) {
-      console.warn("Primary API (Gemini) failed. Falling back to Groq...", err);
+      console.warn("Primary API (Groq) failed. Falling back to Gemini...", err);
       try {
-        const fallbackRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'llama3-8b-8192',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.7,
-            max_tokens: 300
-          })
-        });
-
-        if (!fallbackRes.ok) {
-          throw new Error(`Fallback API failed: ${fallbackRes.status}`);
-        }
-
-        const data = await fallbackRes.json();
-        summary = data.choices[0].message.content.trim();
+        const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const response = await model.generateContent(prompt);
+        summary = response.response.text() || "";
       } catch (fallbackErr) {
         console.error("Both primary and fallback APIs failed", fallbackErr);
         summary = "Error generating report. Stay focused.";

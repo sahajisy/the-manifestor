@@ -38,38 +38,37 @@ Return only the question text. Do not include quotes around it.`;
     let question = "";
 
     try {
-      // 1. Try Primary API (Google Gemini)
-      const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-      const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      const response = await model.generateContent(prompt);
-      question = response.response.text() || "";
+      // 1. Try Primary API (Groq)
+      const primaryRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama3-8b-8192',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          max_tokens: 100
+        })
+      });
+
+      if (!primaryRes.ok) {
+        const errorText = await primaryRes.text();
+        throw new Error(`Primary API (Groq) failed: ${primaryRes.status} - ${errorText}`);
+      }
+
+      const data = await primaryRes.json();
+      question = data.choices[0].message.content.trim();
     } catch (primaryError) {
-      console.warn("Primary API (Gemini) failed. Falling back...", primaryError);
+      console.warn("Primary API (Groq) failed. Falling back to Gemini...", primaryError);
 
       try {
-        // 2. Try Secondary API Fallback (e.g., Groq with Llama 3)
-        // Make sure to add GROQ_API_KEY to your .env.local file
-        const fallbackRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'llama3-8b-8192',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.7,
-            max_tokens: 100
-          })
-        });
-
-        if (!fallbackRes.ok) {
-          const errorText = await fallbackRes.text();
-          throw new Error(`Fallback API failed: ${fallbackRes.status} - ${errorText}`);
-        }
-
-        const data = await fallbackRes.json();
-        question = data.choices[0].message.content.trim();
+        // 2. Try Secondary API Fallback (Google Gemini)
+        const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const response = await model.generateContent(prompt);
+        question = response.response.text() || "";
       } catch (fallbackError) {
         console.error("Both primary and fallback APIs failed!", fallbackError);
         // 3. Ultimate Hardcoded Fallback
