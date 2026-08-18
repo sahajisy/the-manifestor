@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(req: Request) {
   try {
-    const { reason, aim } = await bodyParse(req);
+    const { reason, aim } = await req.json().catch(() => ({}));
 
     if (!reason || reason.length < 50) {
       return NextResponse.json({
@@ -57,13 +57,5 @@ Only return raw JSON. No markdown formatting. No backticks.
     console.error("No-Quit evaluation failed:", error);
     // If the API fails, we shouldn't trap them forever due to a server error.
     return NextResponse.json({ accepted: true, message: "Server error. You may pass." });
-  }
-}
-
-async function bodyParse(req: Request) {
-  try {
-    return await req.json();
-  } catch {
-    return {};
   }
 }

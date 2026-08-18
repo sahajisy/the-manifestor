@@ -76,7 +76,6 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       const JSZip = (await import('jszip')).default;
-      const { saveAs } = await import('file-saver');
       const { collection, query, getDocs } = await import('firebase/firestore');
 
       const checksSnap = await getDocs(query(collection(db, 'users', user.uid, 'checks')));
@@ -130,7 +129,12 @@ export default function SettingsPage() {
       zip.file("Journey_Log.txt", textLog);
       
       const zipBlob = await zip.generateAsync({ type: "blob" });
-      saveAs(zipBlob, `${aim.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_archive.zip`);
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${aim.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_archive.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
       
       await Promise.all(checksSnap.docs.map(d => deleteDoc(doc(db, 'users', user.uid, 'checks', d.id))));
       await Promise.all(reportsSnap.docs.map(d => deleteDoc(doc(db, 'users', user.uid, 'reports', d.id))));

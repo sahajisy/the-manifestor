@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { useAuth } from './AuthProvider';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { VoiceRecorder } from 'capacitor-voice-recorder';
+
 
 interface RealityCheckProps {
   userId: string;
@@ -84,41 +84,23 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
   const startRecording = async () => {
     if (recorded) return;
     try {
-      let isNative = false;
-      try {
-        const canRecord = await VoiceRecorder.canDeviceVoiceRecord();
-        isNative = canRecord.value;
-      } catch (e) {
-        // web fallback throws unimplemented
-        isNative = false;
-      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
 
-      if (isNative) {
-        const perm = await VoiceRecorder.hasAudioRecordingPermission();
-        if (!perm.value) {
-          const req = await VoiceRecorder.requestAudioRecordingPermission();
-          if (!req.value) throw new Error("Permission denied");
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
         }
-        await VoiceRecorder.startRecording();
-      } else {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorderRef.current = new MediaRecorder(stream);
-        audioChunksRef.current = [];
+      };
 
-        mediaRecorderRef.current.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunksRef.current.push(event.data);
-          }
-        };
+      mediaRecorderRef.current.onstop = () => {
+        const mimeType = mediaRecorderRef.current?.mimeType || '';
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        setAudioBlob(blob);
+      };
 
-        mediaRecorderRef.current.onstop = () => {
-          const mimeType = mediaRecorderRef.current?.mimeType || '';
-          const blob = new Blob(audioChunksRef.current, { type: mimeType });
-          setAudioBlob(blob);
-        };
-
-        mediaRecorderRef.current.start();
-      }
+      mediaRecorderRef.current.start();
       
       setPressing(true);
       timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
@@ -137,22 +119,6 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
       if (mediaRecorderRef.current) {
         mediaRecorderRef.current.stop();
         mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      } else {
-        try {
-          const result = await VoiceRecorder.stopRecording();
-          if (result.value && result.value.recordDataBase64) {
-            const byteCharacters = atob(result.value.recordDataBase64);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: result.value.mimeType || 'audio/webm' });
-            setAudioBlob(blob);
-          }
-        } catch (e) {
-          console.error("Failed to stop native recorder", e);
-        }
       }
     }
   };
@@ -173,24 +139,28 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
     }
   };
 
-  const convertBlobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = reject;
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(blob);
-    });
-  };
-
   const submitAnswer = async () => {
     if (!audioBlob || !question) return;
     setUploading(true);
     try {
-      const base64Audio = await convertBlobToBase64(audioBlob);
-      
+      let audioUrl = "";
+      let isOffline = !navigator.onLine;
+
+      if (!isOffline) {
+        try {
+          const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+          const { storage } = await import('@/lib/firebase');
+          const storageRef = ref(storage, `audio/${userId}/${Date.now()}.webm`);
+          await uploadBytes(storageRef, audioBlob);
+          audioUrl = await getDownloadURL(storageRef);
+        } catch (e) {
+          isOffline = true;
+        }
+      }
+
       let transcript = "";
       let sentimentScore = null;
-      if (settings?.autoTranscribe !== false) {
+      if (settings?.autoTranscribe !== false && !isOffline) {
         try {
           const formData = new FormData();
           formData.append('file', audioBlob);
@@ -202,7 +172,6 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
             const data = await res.json();
             transcript = data.transcript || "";
             
-            // Fetch sentiment if we got a transcript
             if (transcript) {
               const sentimentRes = await fetch('/api/analyze-sentiment', {
                 method: 'POST',
@@ -222,7 +191,7 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
 
       const docPayload: any = {
         question,
-        audioUrl: base64Audio,
+        audioUrl,
         transcript,
         timestamp: serverTimestamp(),
       };
@@ -231,7 +200,12 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
         docPayload.sentimentScore = sentimentScore;
       }
 
-      await addDoc(collection(db, 'users', userId, 'checks'), docPayload);
+      const docRef = await addDoc(collection(db, 'users', userId, 'checks'), docPayload);
+
+      if (isOffline) {
+        const { enqueueAudio } = await import('@/lib/offlineQueue');
+        await enqueueAudio(docRef.id, userId, `audio/${userId}/${Date.now()}.webm`, audioBlob);
+      }
       
       // Schedule next notification in 24 hours using Capacitor
       try {

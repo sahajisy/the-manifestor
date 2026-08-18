@@ -2,8 +2,9 @@
 
 import { useEffect } from 'react';
 import { db, storage } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
+import { getQueuedAudio, removeQueuedAudio } from '@/lib/offlineQueue';
 
 export function SyncManager() {
   useEffect(() => {
@@ -11,7 +12,7 @@ export function SyncManager() {
       if (!navigator.onLine) return;
 
       try {
-        const { getQueuedAudio, removeQueuedAudio } = await import('@/lib/offlineQueue');
+
         const queue = await getQueuedAudio();
         
         if (queue.length === 0) return;
@@ -26,7 +27,7 @@ export function SyncManager() {
             
             // Need to convert blob to base64 or upload bytes
             // The previous code used uploadString with data_url, but we can use uploadBytes with Blob
-            const { uploadBytes } = await import('firebase/storage');
+
             await uploadBytes(storageRef, item.audioBlob);
             const downloadUrl = await getDownloadURL(storageRef);
 
@@ -50,7 +51,7 @@ export function SyncManager() {
                   // We don't have aim stored in the item queue.
                   // Since we are inside the client, we could fetch it from the user doc, but it's easier to just pass "Unknown aim" and let Gemini guess from transcript, or skip sentiment for background sync for now.
                   // Let's fetch the aim from Firestore since we have userId.
-                  const { getDoc } = await import('firebase/firestore');
+
                   const userDoc = await getDoc(doc(db, 'users', item.userId));
                   const aim = userDoc.exists() ? userDoc.data().aim : "Goal";
 
