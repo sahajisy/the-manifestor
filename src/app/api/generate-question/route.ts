@@ -46,10 +46,10 @@ Return only the question text. Do not include quotes around it.`;
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'groq/compound',
+          model: 'openai/gpt-oss-20b',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,
-          max_tokens: 100
+          max_tokens: 1000
         })
       });
 
@@ -59,25 +59,35 @@ Return only the question text. Do not include quotes around it.`;
       }
 
       const data = await primaryRes.json();
-      question = data.choices[0].message.content.trim();
+      question = data.choices?.[0]?.message?.content?.trim() || "";
+      if (!question) throw new Error("Groq returned empty content (possibly ran out of tokens while reasoning)");
     } catch (primaryError) {
       console.warn("Primary API (Groq) failed. Falling back to Gemini...", primaryError);
+      (globalThis as any).groqErr = primaryError.toString();
 
       try {
-        // 2. Try Secondary API Fallback (Google Gemini)
-        const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-        const model = ai.getGenerativeModel({ model: 'gemini-3.6-flash' });
-        const response = await model.generateContent(prompt);
-        question = response.response.text() || "";
-      } catch (fallbackError) {
+        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        
+        if (!geminiRes.ok) {
+           const errText = await geminiRes.text();
+           throw new Error(`Gemini API failed: ${geminiRes.status} - ${errText}`);
+        }
+        
+        const geminiData = await geminiRes.json();
+        question = geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+        if (!question) throw new Error("Gemini returned empty content");
+      } catch (fallbackError: any) {
         console.error("Both primary and fallback APIs failed!", fallbackError);
-        // 3. Ultimate Hardcoded Fallback
-        question = "Are you actually working towards your aim today, or just pretending?";
+        question = `Are you actually working towards your aim today, or just pretending? GROQ: ${primaryError.message} GEMINI: ${fallbackError.message}`;
       }
     }
 
     if (!question) {
-      question = "Are you actually working towards your aim today, or just pretending?";
+      question = `Are you actually working towards your aim today, or just pretending? NO QUESTION GENERATED`;
     }
 
     // Clean up quotes if the model accidentally included them

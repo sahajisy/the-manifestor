@@ -29,26 +29,29 @@ Format it in simple markdown. Keep it under 200 words.`;
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'groq/compound',
+          model: 'openai/gpt-oss-20b',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,
-          max_tokens: 300
+          max_tokens: 1000
         })
       });
 
       if (!primaryRes.ok) {
-        throw new Error(`Primary API (Groq) failed: ${primaryRes.status}`);
+        const errText = await primaryRes.text();
+        throw new Error(`Primary API (Groq) failed: ${primaryRes.status} - ${errText}`);
       }
 
       const data = await primaryRes.json();
-      summary = data.choices[0].message.content.trim();
+      summary = data.choices?.[0]?.message?.content?.trim() || "";
+      if (!summary) throw new Error("Groq returned empty content (possibly ran out of tokens while reasoning)");
     } catch (err) {
       console.warn("Primary API (Groq) failed. Falling back to Gemini...", err);
       try {
         const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-        const model = ai.getGenerativeModel({ model: 'gemini-3.6-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
         const response = await model.generateContent(prompt);
         summary = response.response.text() || "";
+        if (!summary) throw new Error("Gemini returned empty content");
       } catch (fallbackErr) {
         console.error("Both primary and fallback APIs failed", fallbackErr);
         summary = "Error generating report. Stay focused.";

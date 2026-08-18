@@ -31,18 +31,21 @@ Return ONLY a valid JSON object with a single key "score" containing the integer
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'groq/compound',
+          model: 'openai/gpt-oss-20b',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.1,
-          max_tokens: 50
+          max_tokens: 1000
         })
       });
 
       if (!primaryRes.ok) {
-        throw new Error(`Primary API (Groq) failed: ${primaryRes.status}`);
+        const errorText = await primaryRes.text();
+        throw new Error(`Primary API (Groq) failed: ${primaryRes.status} - ${errorText}`);
       }
+
       const data = await primaryRes.json();
-      const text = data.choices[0].message.content.trim();
+      let text = data.choices?.[0]?.message?.content?.trim() || "";
+      if (!text) throw new Error("Groq returned empty content (possibly ran out of tokens while reasoning)");
       const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleaned);
       if (typeof parsed.score === 'number') {
@@ -53,9 +56,10 @@ Return ONLY a valid JSON object with a single key "score" containing the integer
       // Fallback
       try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-        const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
         const response = await model.generateContent(prompt);
-        const text = response.response.text() || "{}";
+        let text = response.response.text() || "";
+        if (!text) throw new Error("Gemini returned empty content");
         const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
         const parsed = JSON.parse(cleaned);
         if (typeof parsed.score === 'number') {
