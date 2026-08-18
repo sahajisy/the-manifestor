@@ -146,6 +146,17 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
       let audioUrl = "";
       let isOffline = !navigator.onLine;
       let transcript = "";
+      
+      let base64Audio = "";
+      try {
+        base64Audio = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(audioBlob);
+        });
+      } catch (err) {
+        console.warn("Base64 conversion failed", err);
+      }
 
       let sentimentScore = null;
       if (settings?.autoTranscribe !== false && !isOffline) {
@@ -169,7 +180,7 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
 
       const docPayload: any = {
         question,
-        audioUrl,
+        audioUrl: base64Audio,
         transcript,
         timestamp: serverTimestamp(),
       };
@@ -268,8 +279,20 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
         )}
       </div>
 
+      {recorded && audioBlob && (
+        <div style={{ marginTop: 16, marginBottom: 8 }}>
+          <p className="label-tag" style={{ marginBottom: 8, color: "#8B949E" }}>YOUR RECORDING</p>
+          <audio 
+            controls 
+            src={URL.createObjectURL(audioBlob)} 
+            style={{ width: '100%', height: '36px', borderRadius: '12px', outline: 'none' }} 
+            className="invert brightness-110 saturate-0 opacity-80" 
+          />
+        </div>
+      )}
+
       {recorded && (
-        <div style={{ marginTop: 16, display: 'flex', gap: '8px', flexDirection: 'column' }}>
+        <div style={{ marginTop: 8, display: 'flex', gap: '8px', flexDirection: 'column' }}>
           <button onClick={submitAnswer} disabled={uploading} style={{ width: "100%", padding: "14px", background: "#E11D48", border: "none", borderRadius: 12, color: "white", fontFamily: "var(--font-dm-sans), sans-serif", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
             {uploading ? 'Locking in Reality...' : 'Submit Session'}
           </button>
