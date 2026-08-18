@@ -61,7 +61,7 @@ Return only the question text. Do not include quotes around it.`;
       const data = await primaryRes.json();
       question = data.choices?.[0]?.message?.content?.trim() || "";
       if (!question) throw new Error("Groq returned empty content (possibly ran out of tokens while reasoning)");
-    } catch (primaryError) {
+    } catch (primaryError: any) {
       console.warn("Primary API (Groq) failed. Falling back to Gemini...", primaryError);
       (globalThis as any).groqErr = primaryError.toString();
 
