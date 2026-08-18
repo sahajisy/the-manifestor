@@ -23,7 +23,7 @@ Format it in simple markdown. Keep it under 200 words.`;
 
     try {
       const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
       const response = await model.generateContent(prompt);
       summary = response.response.text() || "";
     } catch (err) {
@@ -36,7 +36,7 @@ Format it in simple markdown. Keep it under 200 words.`;
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
+            model: 'llama3-8b-8192',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.7,
             max_tokens: 300

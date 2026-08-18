@@ -40,7 +40,7 @@ Return only the question text. Do not include quotes around it.`;
     try {
       // 1. Try Primary API (Google Gemini)
       const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
       const response = await model.generateContent(prompt);
       question = response.response.text() || "";
     } catch (primaryError) {
@@ -56,7 +56,7 @@ Return only the question text. Do not include quotes around it.`;
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
+            model: 'llama3-8b-8192',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.7,
             max_tokens: 100
