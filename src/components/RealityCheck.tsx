@@ -152,6 +152,7 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
         try {
           const formData = new FormData();
           formData.append('file', audioBlob);
+          formData.append('aim', aim);
           const res = await fetch('/api/transcribe', {
             method: 'POST',
             body: formData
@@ -159,18 +160,7 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
           if (res.ok) {
             const data = await res.json();
             transcript = data.transcript || "";
-            
-            if (transcript) {
-              const sentimentRes = await fetch('/api/analyze-sentiment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ aim, transcript })
-              });
-              if (sentimentRes.ok) {
-                const sentimentData = await sentimentRes.json();
-                sentimentScore = sentimentData.score;
-              }
-            }
+            sentimentScore = data.sentimentScore ?? null;
           }
         } catch (err) {
           console.error("Transcription/Sentiment failed", err);
@@ -195,27 +185,11 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
         await enqueueAudio(docRef.id, userId, `audio/${userId}/${Date.now()}.webm`, audioBlob);
       }
       
-      // Schedule next notification in 24 hours using Capacitor
-      try {
-        const { LocalNotifications } = await import('@capacitor/local-notifications');
-        const permStatus = await LocalNotifications.checkPermissions();
-        if (permStatus.display !== 'granted') {
-          await LocalNotifications.requestPermissions();
+      // Simple browser notification request instead of Capacitor
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+          Notification.requestPermission();
         }
-        
-        await LocalNotifications.schedule({
-          notifications: [
-            {
-              title: "The Clock is Ticking",
-              body: `It's been 24 hours since your last Reality Check. Don't make excuses today.`,
-              id: 1,
-              schedule: { at: new Date(Date.now() + 1000 * 60 * 60 * 24) }, // 24 hours from now
-              sound: 'beep.wav',
-            }
-          ]
-        });
-      } catch (err) {
-        console.warn("LocalNotifications not available (likely web environment)", err);
       }
 
       onComplete(); 
