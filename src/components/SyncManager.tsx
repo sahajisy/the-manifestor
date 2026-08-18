@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import { db, storage } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { getQueuedAudio, removeQueuedAudio } from '@/lib/offlineQueue';
 
 export function SyncManager() {
@@ -21,18 +20,7 @@ export function SyncManager() {
 
         for (const item of queue) {
           try {
-            // Convert Blob back to base64 for uploadString, or just upload bytes
-            // Wait, storage accepts uploadBytes directly for Blob
-            const storageRef = ref(storage, item.audioFileName);
-            
-            // Need to convert blob to base64 or upload bytes
-            // The previous code used uploadString with data_url, but we can use uploadBytes with Blob
-
-            await uploadBytes(storageRef, item.audioBlob);
-            const downloadUrl = await getDownloadURL(storageRef);
-
-            // Transcribe if needed - for simplicity we just update the URL for now
-            // or we could ping the transcribe API here using the blob
+            // Audio storage is disabled. Just run transcription directly.
             let transcript = "";
             let sentimentScore = null;
             try {
@@ -72,7 +60,7 @@ export function SyncManager() {
 
             // Update Firestore document
             const docRef = doc(db, 'users', item.userId, 'checks', item.id);
-            const updatePayload: any = { audioUrl: downloadUrl };
+            const updatePayload: any = {};
             if (transcript) updatePayload.transcript = transcript;
             if (sentimentScore !== null) updatePayload.sentimentScore = sentimentScore;
             

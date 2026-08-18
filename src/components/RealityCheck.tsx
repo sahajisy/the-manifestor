@@ -145,20 +145,8 @@ export function RealityCheck({ userId, aim, intensity, onComplete }: RealityChec
     try {
       let audioUrl = "";
       let isOffline = !navigator.onLine;
-
-      if (!isOffline) {
-        try {
-          const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-          const { storage } = await import('@/lib/firebase');
-          const storageRef = ref(storage, `audio/${userId}/${Date.now()}.webm`);
-          await uploadBytes(storageRef, audioBlob);
-          audioUrl = await getDownloadURL(storageRef);
-        } catch (e) {
-          isOffline = true;
-        }
-      }
-
       let transcript = "";
+
       let sentimentScore = null;
       if (settings?.autoTranscribe !== false && !isOffline) {
         try {
