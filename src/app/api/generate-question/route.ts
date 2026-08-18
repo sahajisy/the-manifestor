@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const runtime = 'edge';
 
@@ -39,12 +39,10 @@ Return only the question text. Do not include quotes around it.`;
 
     try {
       // 1. Try Primary API (Google Gemini)
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: prompt,
-      });
-      question = response.text || "";
+      const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const response = await model.generateContent(prompt);
+      question = response.response.text() || "";
     } catch (primaryError) {
       console.warn("Primary API (Gemini) failed. Falling back...", primaryError);
 

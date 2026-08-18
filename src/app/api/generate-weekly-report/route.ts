@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Resend } from 'resend';
 
 export async function POST(req: Request) {
@@ -22,12 +22,10 @@ Format it in simple markdown. Keep it under 200 words.`;
     let summary = "";
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: prompt,
-      });
-      summary = response.text || "";
+      const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const response = await model.generateContent(prompt);
+      summary = response.response.text() || "";
     } catch (err) {
       console.warn("Primary API (Gemini) failed. Falling back to Groq...", err);
       try {
