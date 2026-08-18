@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+
 
 async function listModels() {
   const apiKey = process.env.GEMINI_API_KEY;

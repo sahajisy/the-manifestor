@@ -29,7 +29,7 @@ Format it in simple markdown. Keep it under 200 words.`;
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'llama3-8b-8192',
+          model: 'groq/compound',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,
           max_tokens: 300
@@ -46,7 +46,7 @@ Format it in simple markdown. Keep it under 200 words.`;
       console.warn("Primary API (Groq) failed. Falling back to Gemini...", err);
       try {
         const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-3.6-flash' });
         const response = await model.generateContent(prompt);
         summary = response.response.text() || "";
       } catch (fallbackErr) {

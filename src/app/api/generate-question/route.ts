@@ -46,7 +46,7 @@ Return only the question text. Do not include quotes around it.`;
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'llama3-8b-8192',
+          model: 'groq/compound',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,
           max_tokens: 100
@@ -66,7 +66,7 @@ Return only the question text. Do not include quotes around it.`;
       try {
         // 2. Try Secondary API Fallback (Google Gemini)
         const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-3.6-flash' });
         const response = await model.generateContent(prompt);
         question = response.response.text() || "";
       } catch (fallbackError) {

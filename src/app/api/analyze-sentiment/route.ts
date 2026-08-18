@@ -31,7 +31,7 @@ Return ONLY a valid JSON object with a single key "score" containing the integer
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'llama3-8b-8192',
+          model: 'groq/compound',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.1,
           max_tokens: 50
@@ -53,7 +53,7 @@ Return ONLY a valid JSON object with a single key "score" containing the integer
       // Fallback
       try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
         const response = await model.generateContent(prompt);
         const text = response.response.text() || "{}";
         const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
