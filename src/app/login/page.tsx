@@ -3,6 +3,7 @@
 import { useAuth } from '@/components/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 const css = `
   .ls-root {
@@ -235,8 +236,8 @@ export default function LoginPage() {
               </button>
 
               {/* Footer */}
-              <p style={{ marginTop:24, textAlign:"center", fontSize:12, color:"rgba(255,255,255,.2)", lineHeight:1.7 }}>
-                Protected by end-to-end encryption · No spam, ever
+              <p style={{ marginTop:24, textAlign:"center", fontSize:12, color:"rgba(255,255,255,.4)", lineHeight:1.7 }}>
+                By signing in, you agree to our <Link href="/terms" style={{ textDecoration: 'underline', color: 'rgba(255,255,255,.6)' }}>Terms</Link> and <Link href="/privacy" style={{ textDecoration: 'underline', color: 'rgba(255,255,255,.6)' }}>Privacy Policy</Link>.
               </p>
             </>
           )}
