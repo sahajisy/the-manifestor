@@ -1,13 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-
-// read .env.local manually
-const envPath = path.resolve('.env.local');
-const envStr = fs.readFileSync(envPath, 'utf8');
-envStr.split('\n').forEach(line => {
-  const match = line.match(/^([^=]+)=(.*)$/);
-  if (match) process.env[match[1]] = match[2];
-});
 
 async function testGroq() {
   const primaryRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
